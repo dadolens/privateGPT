@@ -19,7 +19,7 @@ model_path = os.environ.get('MODEL_PATH')
 model_n_ctx = os.environ.get('MODEL_N_CTX')
 model_n_batch = int(os.environ.get('MODEL_N_BATCH',8))
 target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',4))
-
+n_threads = int(os.cpu_count() * 0.75)
 from constants import CHROMA_SETTINGS
 
 def main():
@@ -36,7 +36,7 @@ def main():
         case "LlamaCpp":
             llm = LlamaCpp(model_path=model_path, n_ctx=model_n_ctx, n_batch=model_n_batch, callbacks=callbacks, verbose=False)
         case "GPT4All":
-            llm = GPT4All(model=model_path, n_ctx=model_n_ctx, backend='gptj', n_batch=model_n_batch, callbacks=callbacks, verbose=False)
+            llm = GPT4All(model=model_path, n_ctx=model_n_ctx, backend='gptj', n_batch=model_n_batch, callbacks=callbacks, verbose=False, n_threads=n_threads)
         case _default:
             print(f"Model {model_type} not supported!")
             exit
