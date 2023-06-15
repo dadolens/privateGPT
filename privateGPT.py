@@ -2,12 +2,12 @@
 from dotenv import load_dotenv
 from langchain.chains import RetrievalQA
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.vectorstores import Chroma
 from langchain.llms import GPT4All, LlamaCpp
 import os
 import argparse
 import time
+from callback_handler import CustomCallbackHandler
 
 load_dotenv()
 
@@ -29,7 +29,8 @@ def main():
     db = Chroma(persist_directory=persist_directory, embedding_function=embeddings, client_settings=CHROMA_SETTINGS)
     retriever = db.as_retriever(search_kwargs={"k": target_source_chunks})
     # activate/deactivate the streaming StdOut callback for LLMs
-    callbacks = [] if args.mute_stream else [StreamingStdOutCallbackHandler()]
+    callbacks = [] if args.mute_stream else [CustomCallbackHandler()]
+    (has_callback) = len(callbacks) != 0
     # Prepare the LLM
     match model_type:
         case "LlamaCpp":
@@ -38,10 +39,12 @@ def main():
             llm = GPT4All(model=model_path, n_ctx=model_n_ctx, backend='gptj', n_batch=model_n_batch, callbacks=callbacks, verbose=False)
         case _default:
             print(f"Model {model_type} not supported!")
-            exit;
+            exit
     qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents= not args.hide_source)
     # Interactive questions and answers
     while True:
+        if (has_callback):
+            callbacks[0].clear_timer()
         query = input("\nEnter a query: ")
         if query == "exit":
             break
@@ -57,13 +60,14 @@ def main():
         # Print the result
         print("\n\n> Question:")
         print(query)
-        print(f"\n> Answer (took {round(end - start, 2)} s.):")
+        requested_time = callbacks[0].get_requested_time() if has_callback else round(end - start, 2)
+        print(f"\n> Answer (took {requested_time} s.):")
         print(answer)
 
         # Print the relevant sources used for the answer
         for document in docs:
             print("\n> " + document.metadata["source"] + ":")
-            print(document.page_content)
+            # print(document.page_content)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='privateGPT: Ask questions to your documents without an internet connection, '
