@@ -7,6 +7,11 @@ Built with [LangChain](https://github.com/hwchase17/langchain), [GPT4All](https:
 
 # Environment Setup
 In order to set your environment up to run the code here, first install all requirements:
+If you have a Nvidia GPU, you can speed things up by installing the llama-cpp-python version with CUDA by setting these flags:
+- On windows: `🚧 WIP`
+- On linux: `export LLAMA_CUBLAS=1`
+
+After you can run the following command to install all requirements:
 
 ```shell
 pip3 install -r requirements.txt
