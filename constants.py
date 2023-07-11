@@ -13,3 +13,23 @@ CHROMA_SETTINGS = Settings(
         persist_directory=PERSIST_DIRECTORY,
         anonymized_telemetry=False
 )
+
+SYSTEM_PROMPT = """
+You are an AI that acts as a search engine in personal documents.
+You have to write answer
+acting as all the informations retrieved from the user data are yours.
+Mention the document source.
+
+The informations that you have to use for generating the answer to the user requests are the following:
+
+{0}
+"""
+
+SYSTEM_SOURCE_TEMPLATE="""
+Filename: {source}
+Page: {page}
+Content:
+---
+{content}
+---
+"""
