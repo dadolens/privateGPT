@@ -95,11 +95,11 @@ def main():
                     "content": query
                     },
                 ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                frequency_penalty=frequence_penalty,
-                presence_penalty=presence_penalty,
+                temperature=float(temperature),
+                max_tokens=int(max_tokens),
+                top_p=float(top_p),
+                frequency_penalty=float(frequence_penalty),
+                presence_penalty=float(presence_penalty),
             )
             answer = response.choices[0].message.content
             token_consumed = response.usage.total_tokens
