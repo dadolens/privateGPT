@@ -3,11 +3,14 @@ from dotenv import load_dotenv
 from langchain.chains import RetrievalQA
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
-from langchain.llms import GPT4All, LlamaCpp
+from langchain.llms import GPT4All, LlamaCpp, OpenAIChat
 import os
 import argparse
 import time
 from callback_handler import CustomCallbackHandler
+import openai
+
+from constants import CHROMA_SETTINGS
 
 load_dotenv()
 
@@ -22,7 +25,7 @@ target_source_chunks = int(os.environ.get('TARGET_SOURCE_CHUNKS',4))
 n_threads = int(os.cpu_count() * 0.75)
 n_gpu_layers = os.environ.get('N_GPU_LAYERS')
 use_mlock = os.environ.get('USE_MLOCK')
-from constants import CHROMA_SETTINGS
+open_ai_api_key = os.environ.get('OPEN_AI_API_KEY')
 
 def main():
     # Parse the command line arguments
@@ -31,7 +34,7 @@ def main():
     db = Chroma(persist_directory=persist_directory, embedding_function=embeddings, client_settings=CHROMA_SETTINGS)
     retriever = db.as_retriever(search_kwargs={"k": target_source_chunks})
     # activate/deactivate the streaming StdOut callback for LLMs
-    callbacks = [] if args.mute_stream else [CustomCallbackHandler()]
+    callbacks = [] #if args.mute_stream else [CustomCallbackHandler()]
     (has_callback) = len(callbacks) != 0
     # Prepare the LLM
     match model_type:
@@ -40,6 +43,8 @@ def main():
                            n_gpu_layers=n_gpu_layers, use_mlock=use_mlock,top_p=0.9)
         case "GPT4All":
             llm = GPT4All(model=model_path, n_ctx=model_n_ctx, backend='gptj', n_batch=model_n_batch, callbacks=callbacks, verbose=False, n_threads=n_threads)
+        case "OpenAI":
+            llm = OpenAIChat(model=model_path, callbacks=callbacks, temperature=0.6, max_tokens=8000, openai_api_key=open_ai_api_key, client=openai.ChatCompletion)
         case _default:
             print(f"Model {model_type} not supported!")
             exit
