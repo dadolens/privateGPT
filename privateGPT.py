@@ -3,7 +3,7 @@ from typing import List
 from dotenv import load_dotenv
 from langchain.chains import RetrievalQA
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import Chroma, VectorStore
 from langchain.schema import Document, LLMResult
 from langchain.llms import GPT4All, LlamaCpp
 from langchain.chat_models import ChatOpenAI
@@ -37,14 +37,11 @@ top_p = os.environ.get('TOP_P')
 frequence_penalty = os.environ.get('FREQUENCY_PENALTY')
 presence_penalty = os.environ.get('PRESENCE_PENALTY')
 
-def main():
+def query(db: VectorStore, query: str, useStreamSSE: bool):
     # Parse the command line arguments
-    args = parse_arguments()
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
-    db = Chroma(persist_directory=persist_directory, embedding_function=embeddings, client_settings=CHROMA_SETTINGS)
     retriever = db.as_retriever(search_kwargs={"k": target_source_chunks})
     # activate/deactivate the streaming StdOut callback for LLMs
-    callbacks = [] if args.mute_stream else [CustomCallbackHandler()]
+    callbacks = [CustomCallbackHandler()]
     if (model_type == "OpenAI"):
         callbacks = []
     (has_callback) = len(callbacks) != 0
@@ -60,82 +57,89 @@ def main():
         case _default:
             print(f"Model {model_type} not supported!")
             exit
-    qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents= not args.hide_source)
+    qa = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True)
     # Interactive questions and answers
-    while True:
-        if (has_callback):
-            callbacks[0].clear_timer()
+
+    if (has_callback):
+        callbacks[0].clear_timer()
+    if query is None:
         query = input("\nEnter a query: ")
         if query == "exit":
-            break
-        if query.strip() == "":
-            continue
+            return
+    if query.strip() == "":
+        return
 
-        # Get the answer from the chain
-        start = time.time()
-        if model_type == "OpenAI":
-            docs: List[Document] = db.search(query, search_type="similarity")
-            docs_prompt = [
-                SYSTEM_SOURCE_TEMPLATE.format(
-                    source=doc.metadata["source"],
-                    page=doc.metadata["page"] if "page" in doc.metadata else "unknown",
-                    content=doc.page_content,
-                ) for doc in docs]
-            system_prompt = SYSTEM_PROMPT.format("\n".join([doc for doc in docs_prompt]))
-            
-            response = openai.ChatCompletion.create(
-                model=model_path,
-                messages=[
-                    {
-                    "role": "system",
-                    "content": system_prompt
-                    },
-                    {
-                    "role": "user",
-                    "content": query
-                    },
-                ],
-                temperature=float(temperature),
-                max_tokens=int(max_tokens),
-                top_p=float(top_p),
-                frequency_penalty=float(frequence_penalty),
-                presence_penalty=float(presence_penalty),
-            )
+    # Get the answer from the chain
+    start = time.time()
+    if model_type == "OpenAI":
+        docs: List[Document] = db.search(query, search_type="similarity")
+        docs_prompt = [
+            SYSTEM_SOURCE_TEMPLATE.format(
+                source=doc.metadata["source"],
+                page=doc.metadata["page"] if "page" in doc.metadata else "unknown",
+                content=doc.page_content,
+            ) for doc in docs]
+        system_prompt = SYSTEM_PROMPT.format("\n".join([doc for doc in docs_prompt]))
+        
+        response = openai.ChatCompletion.create(
+            model=model_path,
+            messages=[
+                {
+                "role": "system",
+                "content": system_prompt
+                },
+                {
+                "role": "user",
+                "content": query
+                },
+            ],
+            temperature=float(temperature),
+            max_tokens=int(max_tokens),
+            top_p=float(top_p),
+            frequency_penalty=float(frequence_penalty),
+            presence_penalty=float(presence_penalty),
+            stream=useStreamSSE
+        )
+        if useStreamSSE:
+            for chunk in response:
+                for choice in chunk.choices:
+                    if 'content' in choice['delta']:
+                        pass
+                        # yield choice['delta']['content']
+            return
+        else:    
             answer = response.choices[0].message.content
             token_consumed = response.usage.total_tokens
-        else:
-            res = qa(query)
-            answer, docs = res['result'], [] if args.hide_source else res['source_documents']
-        
-        end = time.time()
+    else:
+        res = qa(query)
+        answer, docs = res['result'], res['source_documents']
+    
+    end = time.time()
 
-        # Print the result
-        print("\n\n> Question:")
-        print(query)
-        requested_time = callbacks[0].get_requested_time() if has_callback else round(end - start, 2)
-        print(f"\n> Answer (took {requested_time} s.):")
-        print(answer)
-        if (token_consumed):
-            print(f"\n>Token consumed: {token_consumed}")
+    # Print the result
+    print("\n\n> Question:")
+    print(query)
+    requested_time = callbacks[0].get_requested_time() if has_callback else round(end - start, 2)
+    print(f"\n> Answer (took {requested_time} s.):")
+    print(answer)
+    if (token_consumed):
+        print(f"\n>Token consumed: {token_consumed}")
 
-        # Print the relevant sources used for the answer
-        if model_type != "OpenAI":
-            for document in docs:
-                print("\n> " + document.metadata["source"] + ":")
-                # print(document.page_content)
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description='privateGPT: Ask questions to your documents without an internet connection, '
-                                                 'using the power of LLMs.')
-    parser.add_argument("--hide-source", "-S", action='store_true',
-                        help='Use this flag to disable printing of source documents used for answers.')
-
-    parser.add_argument("--mute-stream", "-M",
-                        action='store_true',
-                        help='Use this flag to disable the streaming StdOut callback for LLMs.')
-
-    return parser.parse_args()
+    # Print the relevant sources used for the answer
+    if model_type != "OpenAI":
+        for document in docs:
+            print("\n> " + document.metadata["source"] + ":")
+            # print(document.page_content)
+    
+    return answer
 
 
 if __name__ == "__main__":
-    main()
+    persist_directory = os.environ.get('PERSIST_DIRECTORY')
+    embeddings_model_name = os.environ.get('EMBEDDINGS_MODEL_NAME')
+
+    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+    db = Chroma(persist_directory=persist_directory, embedding_function=embeddings, client_settings=CHROMA_SETTINGS)
+    
+    query(db)
+    db = None

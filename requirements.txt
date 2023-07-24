@@ -12,3 +12,5 @@ pandoc==2.3
 pypandoc==1.11
 tqdm==4.65.0
 openai==0.27.8
+flask==2.3.2
+Flask-Cors==4.0.0
