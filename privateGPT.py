@@ -130,7 +130,7 @@ def query(db: VectorStore, query: str, useStreamSSE: bool):
             print("\n> " + document.metadata["source"] + ":")
             # print(document.page_content)
     
-    return answer
+    yield answer
 
 
 if __name__ == "__main__":
