@@ -104,8 +104,7 @@ def query(db: VectorStore, query: str, useStreamSSE: bool):
             for chunk in response:
                 for choice in chunk.choices:
                     if 'content' in choice['delta']:
-                        pass
-                        # yield choice['delta']['content']
+                        yield choice['delta']['content']
             return
         else:    
             answer = response.choices[0].message.content

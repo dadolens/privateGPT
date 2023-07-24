@@ -31,7 +31,8 @@ def ingestApi():
 
 @app.route('/api/query', methods=['POST'])
 def queryApi():
-  return json.dumps(query(db, request.json["q"], False))
+  return Response(query(db, request.json["q"], True), mimetype="application/octet-stream")
+
 
 @app.route('/api/stream/query', methods=['POST'])
 def streamQueryApi():
